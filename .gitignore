@@ -1,0 +1,13 @@
+.dart_tool/
+.packages
+build/
+pubspec.lock
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+local.properties
+android/.gradle/
+android/captures/
+android/key.properties
+*.jks
