@@ -35,6 +35,7 @@ jobs:
           rm -rf lib && cp -r /tmp/lib_backup lib
           rm -f test/widget_test.dart
           cp android_overrides/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          cp android_overrides/proguard-rules.pro android/app/proguard-rules.pro
 
       - name: Set minSdk to 24
         run: |
