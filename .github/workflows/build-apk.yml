@@ -54,8 +54,26 @@ jobs:
         continue-on-error: true
         run: flutter test
 
+      - name: Raise compileSdk of plugins to 36
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/compilesdk.gradle <<'GRADLE'
+          allprojects { p ->
+            p.afterEvaluate {
+              def a = p.extensions.findByName('android')
+              if (a != null) {
+                def cur = a.hasProperty('compileSdk') ? a.compileSdk : null
+                if (cur == null || cur < 36) {
+                  if (a.hasProperty('compileSdk')) { a.compileSdk = 36 } else { a.compileSdkVersion(36) }
+                }
+              }
+            }
+          }
+          GRADLE
+          cat ~/.gradle/init.d/compilesdk.gradle
+
       - name: Build release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --no-shrink
 
       - uses: actions/upload-artifact@v4
         with:
