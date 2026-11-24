@@ -74,7 +74,24 @@ jobs:
           cat ~/.gradle/init.d/compilesdk.gradle
 
       - name: Build release APK
-        run: flutter build apk --release --no-shrink
+        run: |
+          set -o pipefail
+          flutter build apk --release --no-shrink 2>&1 | tee build.log
+
+      - name: Error summary (only on failure)
+        if: failure()
+        run: |
+          echo "=============== ERROR SUMMARY ==============="
+          grep -v -E '^\[[ =]*\]|Downloading|Unzipping|Fetch remote|Computing updates|Loading local' build.log \
+            | grep -n -E -A 14 'What went wrong|error:|ERROR|FAILURE|Execution failed|Could not' | head -80
+          echo "=============== END SUMMARY ==============="
+
+      - name: Upload build log (only on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - uses: actions/upload-artifact@v4
         with:
