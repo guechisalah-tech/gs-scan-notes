@@ -44,6 +44,18 @@ jobs:
           sed -i -E 's/minSdk(Version)?[[:space:]]*=[[:space:]]*flutter\.minSdkVersion/minSdk = 24/; s/minSdkVersion[[:space:]]+flutter\.minSdkVersion/minSdkVersion 24/' "$f"
           grep -n minSdk "$f"
 
+      - name: Disable R8 minify/obfuscation (breaks ML Kit at runtime)
+        run: |
+          f=android/app/build.gradle.kts
+          if [ -f "$f" ]; then
+            sed -i -E 's/^([[:space:]]*)release \{/\1release {\n\1    isMinifyEnabled = false\n\1    isShrinkResources = false/' "$f"
+          else
+            f=android/app/build.gradle
+            sed -i -E 's/^([[:space:]]*)release \{/\1release {\n\1    minifyEnabled false\n\1    shrinkResources false/' "$f"
+          fi
+          sed -n '/buildTypes/,/^    }/p' "$f"
+          grep -q -E 'isMinifyEnabled = false|minifyEnabled false' "$f"
+
       - name: Get packages
         run: flutter pub get
 
