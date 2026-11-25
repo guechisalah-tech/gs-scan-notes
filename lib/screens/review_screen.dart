@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models.dart';
 import 'common.dart';
+import 'manual_entry_screen.dart';
 
 enum _Filter { all, confirmed, uncertain, missing, ignored }
 
@@ -58,6 +59,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 s.approveConfirmed();
               } else if (v == 'skipped') {
                 _showSkipped(context, s);
+              } else if (v == 'all') {
+                Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const ManualEntryScreen()));
               } else if (v == 'raw') {
                 _showRaw(context, s);
               } else if (v == 'add') {
@@ -70,6 +74,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
               const PopupMenuItem(value: 'rematch', child: Text('إعادة المطابقة للكل')),
               PopupMenuItem(
                   value: 'skipped', child: Text('الأسطر المتجاوزة (${s.skipped.length})')),
+              const PopupMenuItem(value: 'all', child: Text('كل التلاميذ وإكمال النقاط يدويًا')),
               const PopupMenuItem(value: 'raw', child: Text('النص المقروء من الصورة')),
               const PopupMenuItem(value: 'add', child: Text('إضافة صف يدويًا')),
             ],

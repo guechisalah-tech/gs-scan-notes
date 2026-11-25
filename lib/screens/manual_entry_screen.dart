@@ -18,8 +18,16 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
   final Map<int, TextEditingController> _c = {};
   String q = '';
 
-  TextEditingController _ctl(Student s) =>
-      _c.putIfAbsent(s.row, () => TextEditingController());
+  /// الحقل يُعبّأ مسبقًا بنقطة قرأها OCR لهذا التلميذ (المطابقات المؤكدة فقط).
+  TextEditingController _ctl(Student s) => _c.putIfAbsent(s.row, () {
+        final app = AppScope.of(context);
+        final hits = app.rows.where((r) =>
+            !r.ignored &&
+            r.status == MatchStatus.confirmed &&
+            r.matched?.row == s.row &&
+            r.gradeText.isNotEmpty);
+        return TextEditingController(text: hits.isEmpty ? '' : hits.first.gradeText);
+      });
 
   @override
   void dispose() {
@@ -53,6 +61,13 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                 isDense: true,
               ),
               onChanged: (v) => setState(() => q = v),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'كل تلاميذ الملف هنا. الخانات المعبأة مسبقًا نقاط قرأها التطبيق من الصورة (مطابقة مؤكدة): راجعها وأكمل الباقي.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ),
           Expanded(
@@ -108,7 +123,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     final entries = <Student, String>{};
     final bad = <String>[];
     for (final st in s.students) {
-      final t = _c[st.row]?.text.trim() ?? '';
+      final t = _ctl(st).text.trim();
       if (t.isEmpty) continue;
       final g = parseGrade(t);
       if (g == null || g < 0 || g > s.maxGrade) {

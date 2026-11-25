@@ -101,5 +101,11 @@ void main() {
       final r = StudentMatcher(longIds(), idOnly: true).match('9999999999999999', '');
       expect(r.status, MatchStatus.missing);
     });
+
+    test('رمز زائد من خط الجدول قبل الرقم يُحذف فتتأكد المطابقة', () {
+      final r = StudentMatcher(longIds(), idOnly: true).match('11001228110059200', '');
+      expect(r.status, MatchStatus.confirmed);
+      expect(r.student!.row, 10);
+    });
   });
 }

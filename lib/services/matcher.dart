@@ -92,6 +92,23 @@ class StudentMatcher {
       pool = list; // رقم مكرر في الملف: نحصر البحث بالاسم داخلهم
     } else if (id.isNotEmpty) {
       idNote = ' (الرقم غير موجود في الملف)';
+      // الخط الفاصل بين الخانات يُقرأ أحيانًا رمزًا زائدًا قبل الرقم أو بعده: نجرّب حذفه.
+      // تطابق رقم كامل (13 رقمًا فأكثر) بعد حذف رمز واحد دليل قوي جدًا.
+      if (id.length >= 13) {
+        final alts = <Student>[];
+        for (final alt in [id.substring(1), id.substring(0, id.length - 1)]) {
+          final l = _byId[alt];
+          if (l != null && l.length == 1 && !alts.contains(l.first)) alts.add(l.first);
+        }
+        if (alts.length == 1) {
+          return MatchResult(alts.first, MatchStatus.confirmed, 0.98,
+              'مطابقة برقم التلميذ بعد حذف رمز زائد');
+        }
+        if (alts.length > 1) {
+          return MatchResult(alts.first, MatchStatus.uncertain, 0.9,
+              'رقم يطابق أكثر من تلميذ بعد حذف رمز زائد', alts);
+        }
+      }
       // رقم قريب جدًا (خطأ OCR في رقم أو رقمين) => غير مؤكد، لا يُعتمد تلقائيًا
       if (id.length >= 10) {
         Student? best;
