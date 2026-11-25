@@ -97,6 +97,16 @@ void main() {
       expect(r.student!.row, 9);
     });
 
+    test('رقم زائد من خط الجدول في البداية أو النهاية يُحذف ويُؤكَّد', () {
+      final m = StudentMatcher(longIds(), idOnly: true);
+      final a = m.match('11101328010140700', ''); // 1 زائدة في البداية
+      expect(a.status, MatchStatus.confirmed);
+      expect(a.student!.row, 9);
+      final b = m.match('10012281100592001', ''); // 1 زائدة في النهاية
+      expect(b.status, MatchStatus.confirmed);
+      expect(b.student!.row, 10);
+    });
+
     test('رقم بعيد = مفقود', () {
       final r = StudentMatcher(longIds(), idOnly: true).match('9999999999999999', '');
       expect(r.status, MatchStatus.missing);

@@ -56,7 +56,23 @@ class StudentMatcher {
       final id = normalizeId(s.id);
       if (id.isNotEmpty) _byId.putIfAbsent(id, () => []).add(s);
     }
+    final counts = <int, int>{};
+    for (final k in _byId.keys) {
+      counts[k.length] = (counts[k.length] ?? 0) + 1;
+    }
+    var bestLen = 0;
+    var bestCount = 0;
+    counts.forEach((len, c) {
+      if (c > bestCount) {
+        bestCount = c;
+        bestLen = len;
+      }
+    });
+    _idLen = bestCount > 0 ? bestLen : null;
   }
+
+  /// الطول الشائع لأرقام التعريف في الملف (مثلًا 16).
+  int? _idLen;
 
   final List<Student> students;
 
@@ -92,6 +108,20 @@ class StudentMatcher {
       pool = list; // رقم مكرر في الملف: نحصر البحث بالاسم داخلهم
     } else if (id.isNotEmpty) {
       idNote = ' (الرقم غير موجود في الملف)';
+      // خط حدود الجدول يُقرأ أحيانًا رقمًا زائدًا (1 أو |) قبل الرقم أو بعده:
+      // إن طابقت نافذة بطول الرقم المعتاد تلميذًا واحدًا فقط فالمطابقة موثوقة.
+      final len = _idLen;
+      if (len != null && id.length > len && id.length <= len + 2) {
+        final hits = <Student>{};
+        for (var st = 0; st + len <= id.length; st++) {
+          final l = _byId[id.substring(st, st + len)];
+          if (l != null && l.length == 1) hits.add(l.first);
+        }
+        if (hits.length == 1) {
+          return MatchResult(hits.first, MatchStatus.confirmed, 0.98,
+              'مطابقة برقم التلميذ (حُذف رقم زائد من القراءة)');
+        }
+      }
       // الخط الفاصل بين الخانات يُقرأ أحيانًا رمزًا زائدًا قبل الرقم أو بعده: نجرّب حذفه.
       // تطابق رقم كامل (13 رقمًا فأكثر) بعد حذف رمز واحد دليل قوي جدًا.
       if (id.length >= 13) {
