@@ -51,7 +51,7 @@ double nameScore(List<String> a, List<String> b) {
 }
 
 class StudentMatcher {
-  StudentMatcher(this.students) {
+  StudentMatcher(this.students, {this.idOnly = false}) {
     for (final s in students) {
       final id = normalizeId(s.id);
       if (id.isNotEmpty) _byId.putIfAbsent(id, () => []).add(s);
@@ -59,15 +59,18 @@ class StudentMatcher {
   }
 
   final List<Student> students;
+
+  /// true: تُتجاهل الأسماء المقروءة (جداول عربية لا يقرؤها محرك OCR) ويُعتمد رقم التلميذ فقط.
+  final bool idOnly;
   final Map<String, List<Student>> _byId = {};
 
   static const double fuzzyThreshold = 0.72;
 
   /// الأولوية: 1) رقم التلميذ  2) اللقب والاسم  3) مطابقة تقريبية.
-  /// المطابقة التقريبية لا تُعتبر "مؤكدة" أبدًا: تحتاج مراجعة الأستاذ.
+  /// المطابقة التقريبية (للرقم أو الاسم) لا تُعتبر "مؤكدة" أبدًا: تحتاج مراجعة الأستاذ.
   MatchResult match(String idText, String nameText) {
     final id = normalizeId(idText);
-    final tokens = nameTokens(nameText);
+    final tokens = idOnly ? <String>[] : nameTokens(nameText);
     final key = ([...tokens]..sort()).join(' ');
 
     List<Student> pool = students;
@@ -89,10 +92,37 @@ class StudentMatcher {
       pool = list; // رقم مكرر في الملف: نحصر البحث بالاسم داخلهم
     } else if (id.isNotEmpty) {
       idNote = ' (الرقم غير موجود في الملف)';
+      // رقم قريب جدًا (خطأ OCR في رقم أو رقمين) => غير مؤكد، لا يُعتمد تلقائيًا
+      if (id.length >= 10) {
+        Student? best;
+        var bd = 99;
+        var tie = false;
+        for (final e in _byId.entries) {
+          if ((e.key.length - id.length).abs() > 2) continue;
+          final d = levenshtein(id, e.key);
+          if (d < bd) {
+            bd = d;
+            best = e.value.first;
+            tie = false;
+          } else if (d == bd) {
+            tie = true;
+          }
+        }
+        if (best != null && bd <= 2 && !tie) {
+          return MatchResult(best, MatchStatus.uncertain, 1 - bd / id.length,
+              'رقم قريب من رقم التلميذ (فرق $bd) — تحقق', [best]);
+        }
+      }
     }
 
     if (tokens.isEmpty) {
-      return const MatchResult(null, MatchStatus.missing, 0, 'لا يوجد اسم للمطابقة');
+      return MatchResult(
+          null,
+          MatchStatus.missing,
+          0,
+          id.isNotEmpty
+              ? 'رقم التلميذ غير موجود في القائمة'
+              : 'لا يوجد رقم ولا اسم للمطابقة');
     }
 
     final exact = pool.where((s) => s.nameKey == key).toList();

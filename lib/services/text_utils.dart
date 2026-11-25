@@ -73,10 +73,44 @@ String normalizeName(String input) {
 List<String> nameTokens(String s) =>
     normalizeName(s).split(' ').where((t) => t.isNotEmpty).toList();
 
-/// رقم التلميذ: أرقام فقط بدون أصفار بادئة.
+/// رقم التلميذ: أرقام فقط بدون أصفار بادئة. يدعم الصيغة العلمية التي قد يخزنها Excel (1.1013E+15).
 String normalizeId(String s) {
-  final d = normalizeDigits(s).replaceAll(RegExp(r'[^0-9]'), '');
+  var t = normalizeDigits(s).trim();
+  if (RegExp(r'^\d+(\.\d+)?[eE]\+?\d+$').hasMatch(t)) {
+    final v = double.tryParse(t);
+    if (v != null) t = v.toStringAsFixed(0);
+  }
+  final d = t.replaceAll(RegExp(r'[^0-9]'), '');
   return d.replaceFirst(RegExp(r'^0+'), '');
+}
+
+const Map<String, String> _idConfusable = {
+  'O': '0', 'o': '0', 'Q': '0', 'D': '0',
+  'I': '1', 'l': '1', '|': '1', 'i': '1', '!': '1',
+  'Z': '2', 'z': '2', 'S': '5', 's': '5', 'B': '8',
+  'g': '9', 'q': '9', 'G': '6', 'b': '6',
+};
+
+/// يحوّل كلمة OCR إلى أرقام تعريف محتملة مع تصحيح الأحرف المتشابهة (O→0, l→1 ...).
+/// يعيد null إن لم تبدُ الكلمة رقمًا (أقل من 4 أرقام، أو فيها رموز غريبة مثل - أو /).
+String? idDigits(String raw) {
+  final t = normalizeDigits(raw.trim());
+  if (t.isEmpty) return null;
+  final b = StringBuffer();
+  var digits = 0;
+  for (final ch in t.split('')) {
+    if (RegExp(r'[0-9]').hasMatch(ch)) {
+      b.write(ch);
+      digits++;
+    } else if (_idConfusable.containsKey(ch)) {
+      b.write(_idConfusable[ch]);
+    } else {
+      return null;
+    }
+  }
+  final s = b.toString();
+  if (digits < 4 || s.length - digits > math.max(2, s.length ~/ 6)) return null;
+  return s;
 }
 
 int levenshtein(String a, String b) {

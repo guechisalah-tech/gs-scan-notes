@@ -58,6 +58,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 s.approveConfirmed();
               } else if (v == 'skipped') {
                 _showSkipped(context, s);
+              } else if (v == 'raw') {
+                _showRaw(context, s);
               } else if (v == 'add') {
                 final r = s.addManualRow();
                 _edit(context, s, r);
@@ -68,6 +70,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
               const PopupMenuItem(value: 'rematch', child: Text('إعادة المطابقة للكل')),
               PopupMenuItem(
                   value: 'skipped', child: Text('الأسطر المتجاوزة (${s.skipped.length})')),
+              const PopupMenuItem(value: 'raw', child: Text('النص المقروء من الصورة')),
               const PopupMenuItem(value: 'add', child: Text('إضافة صف يدويًا')),
             ],
           ),
@@ -143,6 +146,26 @@ class _ReviewScreenState extends State<ReviewScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showRaw(BuildContext context, AppState s) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ما قرأه المحرك (للتشخيص)'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              s.rawLines.isEmpty ? 'لا يوجد نص' : s.rawLines.join('\n'),
+              style: const TextStyle(fontSize: 12),
+              textDirection: TextDirection.ltr,
+            ),
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق'))],
       ),
     );
   }
@@ -266,7 +289,7 @@ class _RowTile extends StatelessWidget {
                     : (v) => s.setApproved(row, v == true),
               ),
             ),
-            Expanded(flex: 3, child: Text(row.lastName, style: st)),
+            Expanded(flex: 3, child: Text(row.lastName.isEmpty ? row.idText : row.lastName, style: st)),
             Expanded(flex: 3, child: Text(row.firstName, style: st)),
             Expanded(
               flex: 2,
@@ -318,17 +341,19 @@ class _EditSheetState extends State<_EditSheet> {
   late final TextEditingController last = TextEditingController(text: widget.row.lastName);
   late final TextEditingController first = TextEditingController(text: widget.row.firstName);
   late final TextEditingController grade = TextEditingController(text: widget.row.gradeText);
+  late final TextEditingController id = TextEditingController(text: widget.row.idText);
 
   @override
   void dispose() {
     last.dispose();
     first.dispose();
     grade.dispose();
+    id.dispose();
     super.dispose();
   }
 
   void _apply() => widget.s.updateRowFields(widget.row,
-      last: last.text.trim(), first: first.text.trim(), grade: grade.text.trim());
+      last: last.text.trim(), first: first.text.trim(), grade: grade.text.trim(), id: id.text.trim());
 
   @override
   Widget build(BuildContext context) {
@@ -346,6 +371,11 @@ class _EditSheetState extends State<_EditSheet> {
               children: [
                 const Text('تعديل الصف', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
+                TextField(
+                    controller: id,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'رقم التلميذ (رقم التعريف)', border: OutlineInputBorder())),
+                const SizedBox(height: 8),
                 TextField(
                     controller: last,
                     decoration: const InputDecoration(labelText: 'اللقب', border: OutlineInputBorder())),

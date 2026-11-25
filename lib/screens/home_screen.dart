@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../app_state.dart';
+import '../services/table_parser.dart';
 import 'common.dart';
+import 'manual_entry_screen.dart';
 import 'mapping_screen.dart';
 import 'review_screen.dart';
 
@@ -79,6 +81,18 @@ class HomeScreen extends StatelessWidget {
               ),
               if (s.hasImage) _ImageCard(s: s),
               _OptionsCard(s: s),
+              _Step(
+                n: 0,
+                icon: Icons.keyboard,
+                title: 'إدخال النقاط يدويًا (بدون صورة)',
+                subtitle: s.hasMapping
+                    ? 'قائمة تلاميذ ملفك: اكتب النقطة أمام كل اسم'
+                    : 'يتطلب أولًا استيراد Excel وتحديد الأعمدة',
+                done: false,
+                enabled: !busy && s.hasMapping,
+                onTap: () => Navigator.of(context)
+                    .push(MaterialPageRoute<void>(builder: (_) => const ManualEntryScreen())),
+              ),
               _Step(
                 n: 4,
                 icon: Icons.document_scanner,
@@ -177,6 +191,19 @@ class HomeScreen extends StatelessWidget {
       append = choice == 'append';
     }
     await s.extract(append: append);
+    final p = s.pending;
+    if (p == null || !context.mounted) return;
+    int? col;
+    if (p.columns.length == 1) {
+      col = 0;
+    } else if (p.columns.length > 1) {
+      col = await showColumnPicker(context, p);
+      if (col == null) {
+        s.pending = null;
+        return;
+      }
+    }
+    s.commitPending(col);
     if (context.mounted && s.hasRows) {
       await Navigator.of(context)
           .push(MaterialPageRoute<void>(builder: (_) => const ReviewScreen()));
@@ -235,7 +262,7 @@ class _Step extends StatelessWidget {
                 CircleAvatar(
                   backgroundColor: done ? Colors.green : Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
-                  child: done ? const Icon(Icons.check) : Text('$n'),
+                  child: done ? const Icon(Icons.check) : (n == 0 ? Icon(icon) : Text('$n')),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -323,7 +350,16 @@ class _OptionsCard extends StatelessWidget {
                 s.refresh();
               },
             ),
-            const Text('موضع عمود النقطة في الصورة', style: TextStyle(fontSize: 13)),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('المطابقة برقم التلميذ فقط', style: TextStyle(fontSize: 14)),
+              subtitle: const Text(
+                  'للجداول العربية: تُتجاهل الأسماء ويُعتمد رقم التعريف (مفعّل تلقائيًا إن كانت أسماء ملفك عربية)',
+                  style: TextStyle(fontSize: 11)),
+              value: s.idOnly,
+              onChanged: (v) => s.setIdOnly(v),
+            ),
+            const Text('العمود المقترح تلقائيًا إن وُجدت عدة أعمدة أرقام', style: TextStyle(fontSize: 13)),
             const SizedBox(height: 6),
             SegmentedButton<bool>(
               segments: const [
@@ -356,4 +392,38 @@ class _OptionsCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// عدة أعمدة أرقام في الصورة (نشاطات، فرض، اختبار...): الأستاذ يختار العمود المطلوب.
+Future<int?> showColumnPicker(BuildContext context, ParsedTable p) {
+  final n = p.columns.length;
+  return showDialog<int>(
+    context: context,
+    builder: (ctx) => SimpleDialog(
+      title: const Text('أي عمود يحتوي النقاط المطلوبة؟'),
+      children: [
+        for (var i = 0; i < n; i++)
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, i),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${i == 0 ? 'أقصى يسار الصورة' : i == n - 1 ? 'أقصى يمين الصورة' : 'وسط الجدول'}'
+                  ' — ${p.columns[i].count} قيمة',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(p.columns[i].samples().join('  •  '),
+                    style: const TextStyle(fontSize: 13), textDirection: TextDirection.ltr),
+              ],
+            ),
+          ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24, 8, 24, 8),
+          child: Text('الأعمدة مرتبة من يسار الصورة إلى يمينها. اختر العمود الذي تقرأ منه القيم الصحيحة.',
+              style: TextStyle(fontSize: 11, color: Colors.black54)),
+        ),
+      ],
+    ),
+  );
 }

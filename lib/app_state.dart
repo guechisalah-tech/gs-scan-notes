@@ -38,6 +38,11 @@ class AppState extends ChangeNotifier {
   String? imagePath;
   bool enhance = true;
   bool gradeOnRight = true;
+  bool idOnly = false;
+  bool _idOnlyUserSet = false;
+  ParsedTable? pending;
+  bool _pendingAppend = false;
+  List<String> rawLines = [];
   double maxGrade = 20;
 
   // ---------- النتائج ----------
@@ -119,7 +124,13 @@ class AppState extends ChangeNotifier {
         ));
       }
     }
-    _matcher = StudentMatcher(students);
+    if (!_idOnlyUserSet) {
+      final arabic = students
+          .where((s) => RegExp(r'[\u0600-\u06FF]').hasMatch(s.displayName))
+          .length;
+      idOnly = students.isNotEmpty && arabic * 2 > students.length && m.idCol != null;
+    }
+    _matcher = StudentMatcher(students, idOnly: idOnly);
     if (rows.isNotEmpty) rematchAll();
     notifyListeners();
   }
@@ -179,11 +190,17 @@ class AppState extends ChangeNotifier {
   }
 
   // ================= الاستخراج =================
+  /// يشغّل OCR ويحلل الجدول. النتيجة تُحفظ في [pending] بانتظار اختيار عمود النقاط
+  /// ثم تُعتمد عبر [commitPending].
   Future<void> extract({bool append = false}) async {
     final path = imagePath;
     if (path == null) throw const AppException('اختر صورة أولًا.');
     if (students.isEmpty) {
       throw const AppException('استورد ملف Excel وحدد الأعمدة أولًا.');
+    }
+    if (idOnly && mapping.idCol == null) {
+      throw const AppException(
+          'المطابقة برقم التلميذ مفعّلة لكن عمود الرقم غير محدد. اختر عمود "رقم التعريف" في إعداد الأعمدة، أو عطّل الخيار.');
     }
     _setBusy(true, 'تحسين الصورة…');
     String? prepared;
@@ -196,20 +213,72 @@ class AppState extends ChangeNotifier {
         throw const AppException(
             'لم يتم العثور على أي نص في الصورة. جرّب صورة أوضح، بإضاءة جيدة، وقصّ الجدول فقط.');
       }
-      final parsed =
-          TableParser(maxGrade: maxGrade, gradeOnRight: gradeOnRight).parse(ocr);
-      if (parsed.rows.isEmpty) {
-        throw const AppException(
-            'تم التعرف على نصوص لكن لم تُستخرج أي صفوف (لقب/اسم + نقطة). تحقق من قص الصورة ومن خيار موضع عمود النقطة (يمين/يسار).');
+      final parsed = TableParser(maxGrade: maxGrade, idOnly: idOnly).parse(ocr);
+      rawLines = append ? [...rawLines, ...parsed.rawLines] : parsed.rawLines;
+      if (parsed.lines.isEmpty) {
+        final seen = parsed.rawLines.take(3).join(' | ');
+        throw AppException(idOnly
+            ? 'لم يُعثر على أي رقم تعريف (8 أرقام فأكثر) في الصورة. قصّ الصورة على الجدول وقرّبها حتى يظهر عمود الأرقام بوضوح.\nما قرأه المحرك: $seen'
+            : 'تم التعرف على نصوص لكن لم يُعثر على أسطر تلاميذ. تحقق من القص، أو فعّل المطابقة برقم التلميذ.\nما قرأه المحرك: $seen');
       }
-      if (!append) rows = [];
-      rows.addAll(parsed.rows);
-      skipped = append ? [...skipped, ...parsed.skipped] : parsed.skipped;
-      _matcher!.matchAll(parsed.rows, maxGrade);
+      pending = parsed;
+      _pendingAppend = append;
     } finally {
       ImageService.deleteIfTemp(prepared);
       _setBusy(false);
     }
+  }
+
+  /// يعتمد نتيجة الاستخراج المعلّقة باستخدام العمود [column] (فهرس في pending.columns).
+  void commitPending(int? column) {
+    final p = pending;
+    if (p == null) return;
+    pending = null;
+    final built = TableParser(maxGrade: maxGrade, idOnly: idOnly).buildRows(p, column);
+    if (built.rows.isEmpty) {
+      throw const AppException(
+          'لم تُستخرج أي نقطة: لم يُقرأ أي رقم نقطة (0 – الحد الأقصى) مقابل أرقام التلاميذ في العمود المختار. جرّب عمودًا آخر، أو صورة أوضح، أو الإدخال اليدوي.');
+    }
+    if (!_pendingAppend) {
+      rows = [];
+    }
+    rows.addAll(built.rows);
+    skipped = _pendingAppend ? [...skipped, ...built.skipped] : built.skipped;
+    _matcher!.matchAll(built.rows, maxGrade);
+    notifyListeners();
+  }
+
+  void setIdOnly(bool v) {
+    idOnly = v;
+    _idOnlyUserSet = true;
+    _matcher = StudentMatcher(students, idOnly: idOnly);
+    if (rows.isNotEmpty) {
+      rematchAll();
+    } else {
+      notifyListeners();
+    }
+  }
+
+  /// إدخال يدوي: كل صف مطابق مباشرة لتلميذه (استبدال أي صف سابق لنفس التلميذ).
+  void addManualGrades(Map<Student, String> entries) {
+    final targets = entries.keys.map((s) => s.row).toSet();
+    rows.removeWhere((r) => r.matched != null && targets.contains(r.matched!.row));
+    for (final e in entries.entries) {
+      final s = e.key;
+      final r = ExtractedRow(
+        lastName: s.lastName,
+        firstName: s.firstName,
+        idText: s.id,
+        gradeText: e.value.trim().replaceAll(',', '.'),
+      );
+      r.matched = s;
+      r.status = MatchStatus.confirmed;
+      r.note = 'إدخال يدوي';
+      r.score = 1;
+      r.approved = r.gradeValid(maxGrade);
+      rows.add(r);
+    }
+    notifyListeners();
   }
 
   // ================= المطابقة والمراجعة =================
@@ -229,11 +298,16 @@ class AppState extends ChangeNotifier {
   }
 
   void updateRowFields(ExtractedRow r,
-      {required String last, required String first, required String grade}) {
-    final namesChanged = last != r.lastName || first != r.firstName;
+      {required String last,
+      required String first,
+      required String grade,
+      String? id}) {
+    final idChanged = id != null && id != r.idText;
+    final namesChanged = last != r.lastName || first != r.firstName || idChanged;
     r.lastName = last;
     r.firstName = first;
     r.gradeText = grade;
+    if (id != null) r.idText = id;
     if (namesChanged) {
       _matcher?.matchRow(r, maxGrade);
     } else if (!r.gradeValid(maxGrade)) {
@@ -357,6 +431,8 @@ class AppState extends ChangeNotifier {
     grid = null;
     students = [];
     _matcher = null;
+    pending = null;
+    rawLines = [];
     fileName = '';
     mapping = ColumnMapping();
     notifyListeners();

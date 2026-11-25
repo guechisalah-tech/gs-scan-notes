@@ -70,4 +70,36 @@ void main() {
     expect(r.student!.row, 8);
     expect(r.status, MatchStatus.uncertain);
   });
+
+  group('أرقام تعريف طويلة', () {
+    List<Student> longIds() => [
+          Student.create(row: 9, id: '1101328010140700', lastName: 'خذاري', firstName: 'جمانة'),
+          Student.create(row: 10, id: '1001228110059200', lastName: 'بحري', firstName: 'عبد الباقي'),
+          Student.create(row: 11, id: '1.1013281100023E+15', lastName: 'عيلاوي', firstName: 'أروى'),
+        ];
+
+    test('الصيغة العلمية في Excel تُطابَق', () {
+      expect(normalizeId('1.1013281100023E+15'), '1101328110002300');
+      final r = StudentMatcher(longIds(), idOnly: true).match('1101328110002300', '');
+      expect(r.status, MatchStatus.confirmed);
+      expect(r.student!.row, 11);
+    });
+
+    test('idOnly: اسم مقروء خاطئ لا يمنع التأكيد برقم مطابق', () {
+      final r = StudentMatcher(longIds(), idOnly: true).match('1101328010140700', 'jgaia110');
+      expect(r.status, MatchStatus.confirmed);
+      expect(r.student!.row, 9);
+    });
+
+    test('رقم بخطأ رقم واحد = غير مؤكد وليس مؤكدًا', () {
+      final r = StudentMatcher(longIds(), idOnly: true).match('1101328010140780', '');
+      expect(r.status, MatchStatus.uncertain);
+      expect(r.student!.row, 9);
+    });
+
+    test('رقم بعيد = مفقود', () {
+      final r = StudentMatcher(longIds(), idOnly: true).match('9999999999999999', '');
+      expect(r.status, MatchStatus.missing);
+    });
+  });
 }

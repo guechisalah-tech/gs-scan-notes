@@ -16,8 +16,8 @@ String _prepareIsolate(_PrepArgs a) {
   if (image == null) throw const FormatException('تعذر قراءة الصورة');
   image = img.bakeOrientation(image);
   final longest = image.width > image.height ? image.width : image.height;
-  if (longest > 2400) {
-    final f = 2400 / longest;
+  if (longest > 3000) {
+    final f = 3000 / longest;
     image = img.copyResize(image,
         width: (image.width * f).round(),
         height: (image.height * f).round(),
