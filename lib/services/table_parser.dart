@@ -292,7 +292,8 @@ class TableParser {
     for (var i = 1; i < vals.length; i++) {
       if (vals[i]! - vals[i - 1]! == 1) seq++;
     }
-    return seq >= 0.7 * (vals.length - 1);
+    // عمود الترقيم يبدأ برقم صغير ويتزايد بواحد تقريبًا؛ نقاط مثل 15،16،17،18 ليست ترقيمًا.
+    return vals.first! <= 3 && seq >= 0.8 * (vals.length - 1);
   }
 
   /// يبني الصفوف من العمود الذي اختاره الأستاذ ([column] = فهرس في ParsedTable.columns).
